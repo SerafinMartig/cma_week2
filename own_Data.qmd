@@ -1,0 +1,211 @@
+---
+title: "own_Data"
+format: html
+---
+
+#Exercise 2
+##Exercise C
+```{r}
+library("tidyr")
+library("readr")
+library("ggplot2")
+library("dplyr")
+
+
+#Task 1: Import data
+herbometer_AreK<- read.delim("Platemeter_240118/Betriebe_pasturefile_240118/AreK_2023_07_07_csv_gps.csv", sep =",")
+
+# herbometer_AreK2<- read.delim("Platemeter_240118/Betriebe_pasturefile_240118/AreK_2023_07_07_csv_gps_localtime.csv", sep =",")
+
+head(herbometer_AreK)
+
+herbometer_AreK_bereinigt <- herbometer_AreK |> 
+  filter(herbometer_AreK$Latitude > 0)
+
+#Task 2: Explore Data
+ggplot(herbometer_AreK_bereinigt, aes(Longitude, Latitude, colour = PaddockName)) +
+  geom_point()
+
+
+#Input: Handling spatial data
+library("sf")
+
+herbometer_AreK_sf <- st_as_sf(herbometer_AreK_bereinigt,
+    coords = c("Longitude", "Latitude"), #Koordinaten definieren
+    crs = 4326   #Koordinatensystem angeben
+)
+#Code für Koordinatensystem finden unter: https://epsg.io/
+
+is.data.frame(herbometer_AreK_sf)
+
+
+
+
+# Task 3: Project data from WGS84
+
+herbometer_AreK_sf_2056 <- herbometer_AreK_sf |>  st_transform(2056)
+
+
+library(tmap)
+tmap_mode("view")
+
+tm_shape(herbometer_AreK_sf_2056) + 
+  tm_dots()
+
+
+
+
+
+# Input: Calculate Convex Hull
+herbometer_AreK_grouped <- group_by(herbometer_AreK_sf_2056, PaddockName)
+
+herbometer_AreK_grouped
+herbometer_AreK_smry <- summarise(herbometer_AreK_grouped)
+
+herbometer_AreK_smry
+
+
+
+#Gruppieren der TierID und einen Bereich, wo es lebt, einzeichnen für jedes Tier anhand den Punkten wo es erschienen ist.
+mcp <- st_convex_hull(herbometer_AreK_smry)
+
+
+# Task 4: Ploting spatial objects
+plot(mcp)
+
+ggplot(mcp, aes(fill = PaddockName))+
+  geom_sf(alpha = 0.4)
+
+
+
+#Input: Importing raster data
+library("terra")
+# install.packages("terra")
+
+
+
+##gibt es eine Karte für Luzern???
+
+# pk100_BE <- terra::rast("Datasets-20240426/pk100_BE.tif")
+# 
+# pk100_BE
+# 
+# plot(pk100_BE)
+# plotRGB(pk100_BE)
+# 
+# 
+# 
+# # Task 5: Adding a background map
+# # install.packages("tmap")
+# library("tmap")
+# 
+# tm_shape(pk100_BE) +
+#     tm_rgb()
+# 
+# tm_shape(pk100_BE) +
+#   tm_rgb()+
+#   tm_shape(mcp)+
+#   tm_polygons(col = "PaddockName", alpha = 0.4, border.col = "red")+
+#   tm_legend(bg.color = "white")
+# 
+# 
+# #Task 6
+# tmap_mode("view")
+# 
+# tm_shape(mcp) +
+#   tm_polygons(col = "PaddockName", alpha = 0.4, border.col = "red")+
+#   tm_legend(bg.color = "white")
+
+```
+
+## wie in Task 2
+
+##Task 2: Getting an overview
+Calculate the time difference between subsequent rows as described in the demo. You can calculate the time difference using the function difftime_secs() (see below) in combination with lead() (see lead() / lag()). Store the time difference in a new column (e.g. timelag).
+```{r}
+herbometer_AreK_sf_2056
+now <- herbometer_AreK_sf_2056$ReadingDateTime
+later <- lead(now)
+
+
+difftime_secs <- function(later, now){
+    as.numeric(difftime(later, now, units = "secs"))
+}
+
+#Funktion von oben ausführen mit dem Datensatz later und now
+herbometer_AreK_sf_2056$timelag <- difftime_secs(later, now)
+
+
+```
+
+##Task 3: Distance between locations
+Similar to how we calculated the timelag between subsequent locations, we can calculate the distance like so:
+```{r}
+later <- lag(herbometer_AreK_sf_2056$geometry)
+now <- herbometer_AreK_sf_2056$geometry
+
+st_distance(later, now, by_element = TRUE)  # by_element must be set to TRUE
+
+
+distance_by_element <- function(later, now){
+  as.numeric(
+    st_distance(later, now, by_element = TRUE)
+  )
+}
+
+herbometer_AreK_sf_2056$steplength <- distance_by_element(later, now)
+  
+herbometer_AreK_sf_2056
+
+```
+
+
+## Task 4: Deriving distance & speed
+In this task we will derive some additional movement parameters from our trajectories. So far our trajectories only consist of a list of time-stamped spatial locations. First let’s calculate the Euclidean distance between subsequent locations using the function st_distance() with the option by_element = TRUE. Store these values in a new column with the name steplength. Next, you can calculate the animals’ speed based on steplength and the timelag (from the last task).
+```{r}
+
+herbometer_AreK_sf_2056 <- herbometer_AreK_sf_2056 %>%
+  group_by(PaddockName) %>%
+  mutate(speed = timelag / steplength)
+
+```
+
+##Task 5: Plausibility Check
+It’s important to repeatedly visualize our results, to make sure these are plausible. This is much simpler if we just look at a small sample of our dataset. We can use slice() to extract just a couple of rows
+```{r}
+herbometer_AreK_sf_2056_sample <- herbometer_AreK_sf_2056 |>
+  filter(PaddockName == "Weidehoch ") |> 
+  head(100)
+
+library(tmap)
+tmap_mode("view")
+
+tm_shape(herbometer_AreK_sf_2056_sample) + 
+  tm_dots()
+
+```
+
+
+#Exercise B
+
+```{r}
+library("readr")
+library("sf")
+library("dplyr")
+
+difftime_secs <- function(x, y){
+  as.numeric(difftime(x, y, units = "secs"))
+}
+
+distance_by_element <- function(later, now){
+  as.numeric(
+    st_distance(later, now, by_element = TRUE)
+  )
+}
+
+
+```
+
+
+
+

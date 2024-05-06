@@ -1,0 +1,221 @@
+---
+title: "Untitled"
+format: html
+---
+
+#Exercise A
+
+##Task 1: Import your data
+```{r}
+library("readr")
+library("sf")
+
+wildschwein_BE <- read_delim("Datasets-20240426/wildschwein_BE_2056.csv", ",")
+
+wildschwein_BE <- st_as_sf(wildschwein_BE, coords = c("E", "N"), crs = 2056)
+
+```
+
+##Task 2: Getting an overview
+Calculate the time difference between subsequent rows as described in the demo. You can calculate the time difference using the function difftime_secs() (see below) in combination with lead() (see lead() / lag()). Store the time difference in a new column (e.g. timelag).
+```{r}
+wildschwein_BE
+now <- wildschwein_BE$DatetimeUTC
+later <- lead(now)
+
+
+difftime_secs <- function(later, now){
+    as.numeric(difftime(later, now, units = "secs"))
+}
+
+#Funktion von oben ausführen mit dem Datensatz later und now
+wildschwein_BE$timelag <- difftime_secs(later, now)
+
+
+```
+
+##Task 3: Distance between locations
+Similar to how we calculated the timelag between subsequent locations, we can calculate the distance like so:
+```{r}
+later <- lag(wildschwein_BE$geometry)
+now <- wildschwein_BE$geometry
+
+st_distance(later, now, by_element = TRUE)  # by_element must be set to TRUE
+
+
+distance_by_element <- function(later, now){
+  as.numeric(
+    st_distance(later, now, by_element = TRUE)
+  )
+}
+
+wildschwein_BE$steplength <- distance_by_element(later, now)
+  
+wildschwein_BE
+
+```
+
+
+## Task 4: Deriving distance & speed
+In this task we will derive some additional movement parameters from our trajectories. So far our trajectories only consist of a list of time-stamped spatial locations. First let’s calculate the Euclidean distance between subsequent locations using the function st_distance() with the option by_element = TRUE. Store these values in a new column with the name steplength. Next, you can calculate the animals’ speed based on steplength and the timelag (from the last task).
+```{r}
+
+wildschwein_BE <- wildschwein_BE %>%
+  group_by(TierID) %>%
+  mutate(speed = timelag / steplength)
+
+```
+
+##Task 5: Plausibility Check
+It’s important to repeatedly visualize our results, to make sure these are plausible. This is much simpler if we just look at a small sample of our dataset. We can use slice() to extract just a couple of rows
+```{r}
+wildschwein_sample <- wildschwein_BE |>
+  filter(TierName == "Sabi") |> 
+  head(100)
+
+library(tmap)
+tmap_mode("view")
+
+tm_shape(wildschwein_sample) + 
+  tm_dots()
+
+```
+
+
+#Exercise B
+
+```{r}
+library("readr")
+library("sf")
+library("dplyr")
+
+difftime_secs <- function(x, y){
+  as.numeric(difftime(x, y, units = "secs"))
+}
+
+distance_by_element <- function(later, now){
+  as.numeric(
+    st_distance(later, now, by_element = TRUE)
+  )
+}
+
+
+caro <- read_delim("Datasets-20240426/caro60.csv", ",") |>
+  st_as_sf(coords = c("E","N"), crs = 2056) |> 
+  select(DatetimeUTC)
+
+
+
+```
+
+## Task 1: Calculate speed at scale 1
+In our first scale, we will assume a sampling window 
+ of 120 seconds. This conveniently means that for every location, you can use the previous and next location to calculate speed. Try to implement this in R.
+
+After completing the task, your dataset should look like this:
+```{r}
+head(caro)
+
+now <- caro$DatetimeUTC
+later <- lead(now, n=1)
+
+
+#Funktion von oben ausführen mit dem Datensatz later und now
+caro$timelag <- difftime_secs(later, now)
+
+# sampling_window_seconds <- 120
+
+later <- lag(caro$geometry, n=1)
+now <- caro$geometry
+
+caro$steplength <- distance_by_element(later, now)
+
+caro <- caro %>%
+  mutate(speed =steplength  / timelag)
+
+```
+
+##Task 2: Calculate speed at scale 2
+```{r}
+head(caro)
+
+now <- caro$DatetimeUTC
+later <- lead(now, n=2)
+
+
+#Funktion von oben ausführen mit dem Datensatz later und now
+caro$timelag2 <- difftime_secs(later, now)
+
+# sampling_window_seconds <- 120
+
+later <- lag(caro$geometry, n=2)
+now <- caro$geometry
+
+caro$steplength2 <- distance_by_element(later, now)
+
+caro <- caro %>%
+  mutate(speed2 =steplength2  / timelag2)
+
+
+```
+
+## Task 3: Calculate speed at scale 3
+```{r}
+head(caro)
+
+now <- caro$DatetimeUTC
+later <- lead(now, n=4)
+
+
+#Funktion von oben ausführen mit dem Datensatz later und now
+caro$timelag3 <- difftime_secs(later, now)
+
+# sampling_window_seconds <- 120
+
+later <- lag(caro$geometry, n=4)
+now <- caro$geometry
+
+caro$steplength3 <- distance_by_element(later, now)
+
+caro <- caro %>%
+  mutate(speed3 =steplength3  / timelag3)
+
+```
+
+## Task 4: Compare speed across scales
+```{r}
+caro |> 
+  st_drop_geometry() |> 
+  select(DatetimeUTC, speed, speed2, speed3)
+
+library(ggplot2)
+
+ggplot(caro, aes(y = speed)) + 
+    # we remove outliers to increase legibility, analogue
+  # Laube and Purves (2011)
+  geom_boxplot(outliers = FALSE)
+
+
+library(tidyr)
+
+# before pivoting, let's simplify our data.frame
+caro2 <- caro |> 
+  st_drop_geometry() |> 
+  select(DatetimeUTC, speed, speed2, speed3)
+
+caro_long <- caro2 |> 
+  pivot_longer(c(speed, speed2, speed3))
+  
+head(caro_long)
+
+
+ggplot(caro_long, aes(name, value)) +
+  # we remove outliers to increase legibility, analogue
+  # Laube and Purves (2011)
+  geom_boxplot(outliers = FALSE)
+
+
+```
+
+
+
