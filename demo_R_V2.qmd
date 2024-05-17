@@ -1,0 +1,149 @@
+---
+title: "Untitled"
+format: html
+---
+#Demo
+##Difftime
+um Differenzen zwischen Zeit zu berechnen
+```{r}
+
+# difftime()
+
+now <- as.POSIXct("2024-04-26 10:20:00")
+later <- as.POSIXct("2024-04-26 11:35:00")
+
+#F1 um hilfe zur Funktion aufzurufen
+difftime(later, now) #gibt automatisch in Stunden an
+
+difftime(later, now, units = "mins") #für Einheit Sekunden
+
+time_difference <- difftime(later, now, units = "secs") #für Einheit Sekunden
+time_difference
+
+str(time_difference)
+
+as.numeric(time_difference) #für nur Zahl
+
+
+#funktion dafür schreiben, weil wir das so häufig machen
+
+difftime_secs <- 
+function(later, now) {
+  as.numeric(difftime(later, now, units = "secs"))
+}
+
+```
+
+
+## Lead and Lag
+```{r}
+
+numbers <- 1:10
+
+numbers
+
+
+library("dplyr")
+
+#Offset my value by one number (on the right)
+lead(numbers)
+#by 2 number
+lead(numbers, n = 2)
+
+#Lag offset my value in the opposite direction
+lag(numbers)
+
+#by 5 number
+lag(numbers, n = 5)
+
+#replace NA with 0
+lag(numbers, n = 5, default = 0)
+
+```
+
+#timelag (Zeitabstand) berechnen
+```{r}
+
+wildschwein <- tibble(
+    TierID = c(rep("Hans", 5), rep("Klara", 5)),
+    DatetimeUTC = rep(as.POSIXct("2015-01-01 00:00:00", tz = "UTC") + 0:4 * 15 * 60, 2)
+)
+ 
+wildschwein
+
+#now sind die Zeiten der Wildschweine
+now <- wildschwein$DatetimeUTC
+
+#later Zeiten definineren, diese sind die Werte von now einfach eins nachnach vorne gerrückt (die Wildschweine sind jeweils einen Punkt weiter gegangen)
+later <- lead(now) #later ist der lead von now
+
+#Funktion von oben ausführen mit dem Datensatz later und now
+wildschwein$timelag <- difftime_secs(later, now)
+
+
+wildschwein
+
+```
+
+## mutate
+```{r}
+
+#das gleiche von oben einfach mit mutate gemacht
+wildschwein <- 
+  mutate(wildschwein, timelag = difftime_secs(lead(DatetimeUTC), DatetimeUTC))
+
+wildschwein
+
+```
+
+#group_by
+weil beim ausführen, die verschiedenen Tiere nicht unterschieden wurden und nicht der Timelag pro Tier berechnet wurde.
+```{r}
+
+#unter metagdaten (grauer bereich wenn ausgeführt) sieht man dass es jetzt unter TierID 2 Gruppen gibt
+wildschwein <- group_by(wildschwein, TierID)
+
+
+wildschwein <- mutate(wildschwein, timelag = difftime(lead(DatetimeUTC), DatetimeUTC))
+
+wildschwein
+
+```
+
+## summarise
+```{r}
+
+summarise(wildschwein, mean = mean(timelag, na.rm = TRUE))
+
+```
+
+
+## pipe
+```{r}
+
+wildschwein |>                                     # Take wildschwein...
+    group_by(TierID) |>                            # ...group it by TierID
+    summarise(                                     # Summarise the data...
+        mean_timelag = mean(timelag, na.rm = TRUE) # ...by calculating the mean timelag mean_timelag ist der Spaltenname
+    )
+
+
+#Minimum ausgeben
+wildschwein |> 
+  group_by(TierID) |> 
+  summarise(
+    first_sample = min(DatetimeUTC) #first_sample ist der Spaltenname
+  )
+
+#Maximum ausgeben
+wildschwein |> 
+  group_by(TierID) |> 
+  summarise(
+    first_sample = max(DatetimeUTC)
+  )
+
+```
+
+
+
+

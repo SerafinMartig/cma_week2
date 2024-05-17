@@ -1,0 +1,10 @@
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+
+/Datasets-20240426
+/Platemeter_240118
+*.csv
+*.tif
+*.gpkg

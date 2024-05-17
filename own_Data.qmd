@@ -10,7 +10,7 @@ library("tidyr")
 library("readr")
 library("ggplot2")
 library("dplyr")
-
+library("gitcreds")
 
 #Task 1: Import data
 herbometer_AreK<- read.delim("Platemeter_240118/Betriebe_pasturefile_240118/AreK_2023_07_07_csv_gps.csv", sep =",")
